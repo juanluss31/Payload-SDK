@@ -21,8 +21,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - name: configure
-      run: ./configure
     - name: Configure build with CMake
       run: |
          cd Payload-SDK/
