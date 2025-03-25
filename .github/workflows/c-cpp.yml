@@ -28,34 +28,6 @@ jobs:
           # Install required system packages
           sudo apt-get install -y automake libaio-dev libusb-1.0-0-dev unzip cmake build-essential pkg-config
           
-          # Install OPUS
-          tar -xzvf opus-1.3.1.tar.gz
-          cd opus-1.3.1/
-          autoreconf -f -i
-          ./configure
-          make -j4
-          sudo make install
-          cd ..
-          
-          # Install FFMPEG
-          tar -zxvf ffmpeg-4.3.2.tar.gz
-          cd ffmpeg-4.3.2/
-          ./configure --enable-shared
-          make -j4
-          sudo make install
-          cd ..
-          
-          # Install OpenCV
-          unzip opencv-3.4.15.zip
-          cd opencv-3.4.15/
-          mkdir build && cd build/
-          cmake ../
-          make -j4
-          sudo make install
-          cd ../..
-          
-          # Check OpenCV version
-          opencv_version
     - name: Build with CMake
       run: |
          mkdir -p build && cd build
