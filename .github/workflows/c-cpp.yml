@@ -23,6 +23,5 @@ jobs:
     - uses: actions/checkout@v4
     - name: Configure build with CMake
       run: |
-         cd Payload-SDK/
          mkdir -p build && cd build
          cmake ../ && make -j4
