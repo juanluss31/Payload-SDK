@@ -61,7 +61,7 @@ jobs:
          mkdir -p build && cd build
          cmake ../ && make -j4
     - name: Upload executable
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: dji_sdk_demo_binary
         path: build/bin/dji_sdk_proyectoieg
