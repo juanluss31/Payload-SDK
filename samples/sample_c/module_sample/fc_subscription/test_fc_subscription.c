@@ -29,6 +29,9 @@
 #include "dji_logger.h"
 #include "dji_platform.h"
 #include "widget_interaction_test/test_widget_interaction.h"
+#include <pthread.h> // For thread creation
+#include <termios.h> // For terminal input handling
+#include <unistd.h>  // For read()
 
 /* Private constants ---------------------------------------------------------*/
 #define FC_SUBSCRIPTION_TASK_FREQ         (1)
@@ -46,6 +49,7 @@ static T_DjiTaskHandle s_userFcSubscriptionThread;
 static bool s_userFcSubscriptionDataShow = false;
 static uint8_t s_totalSatelliteNumberUsed = 0;
 static uint32_t s_userFcSubscriptionDataCnt = 0;
+static volatile bool keepRunning = true;
 
 /* Exported functions definition ---------------------------------------------*/
 T_DjiReturnCode DjiTest_FcSubscriptionStartService(void)
@@ -106,14 +110,42 @@ T_DjiReturnCode DjiTest_FcSubscriptionStartService(void)
     return DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS;
 }
 
+// Function to listen for Ctrl+Q in a separate thread
+void *KeyboardListener(void *arg) {
+    struct termios oldt, newt;
+    char ch;
+
+    // Disable terminal buffering
+    tcgetattr(STDIN_FILENO, &oldt);
+    newt = oldt;
+    newt.c_lflag &= ~(ICANON | ECHO);
+    tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+
+    // Listen for Ctrl+Q (ASCII 17)
+    while (keepRunning) {
+        read(STDIN_FILENO, &ch, 1);
+        if (ch == 17) { // ASCII code for Ctrl+Q
+            keepRunning = false;
+        }
+    }
+
+    // Restore terminal settings
+    tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+    return NULL;
+}
+
 T_DjiReturnCode DjiTest_FcSubscriptionRunSample(void)
 {
     T_DjiReturnCode djiStat;
     T_DjiOsalHandler *osalHandler = DjiPlatform_GetOsalHandler();
-    T_DjiFcSubscriptionVelocity velocity = {0};
-    T_DjiDataTimestamp timestamp = {0};
     T_DjiFcSubscriptionGpsPosition gpsPosition = {0};
     T_DjiFcSubscriptionSingleBatteryInfo singleBatteryInfo = {0};
+    T_DjiFcSubscriptionRtkPosition rtkPosition = {0}; // Add RTK position structure
+    T_DjiDataTimestamp timestamp = {0};
+    pthread_t keyboardThread;
+
+    // Start the keyboard listener thread
+    pthread_create(&keyboardThread, NULL, KeyboardListener, NULL);
 
     USER_LOG_INFO("Fc subscription sample start");
     s_userFcSubscriptionDataShow = true;
@@ -125,44 +157,32 @@ T_DjiReturnCode DjiTest_FcSubscriptionRunSample(void)
         return DJI_ERROR_SYSTEM_MODULE_CODE_UNKNOWN;
     }
 
-    USER_LOG_INFO("--> Step 2: Subscribe the topics of quaternion, velocity and gps position");
-    djiStat = DjiFcSubscription_SubscribeTopic(DJI_FC_SUBSCRIPTION_TOPIC_QUATERNION, DJI_DATA_SUBSCRIPTION_TOPIC_50_HZ,
-                                               DjiTest_FcSubscriptionReceiveQuaternionCallback);
-    if (djiStat != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
-        USER_LOG_ERROR("Subscribe topic quaternion error.");
-        return DJI_ERROR_SYSTEM_MODULE_CODE_UNKNOWN;
-    }
-
-    djiStat = DjiFcSubscription_SubscribeTopic(DJI_FC_SUBSCRIPTION_TOPIC_VELOCITY, DJI_DATA_SUBSCRIPTION_TOPIC_1_HZ,
-                                               NULL);
-    if (djiStat != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
-        USER_LOG_ERROR("Subscribe topic velocity error.");
-        return DJI_ERROR_SYSTEM_MODULE_CODE_UNKNOWN;
-    }
-
-    djiStat = DjiFcSubscription_SubscribeTopic(DJI_FC_SUBSCRIPTION_TOPIC_GPS_POSITION, DJI_DATA_SUBSCRIPTION_TOPIC_1_HZ,
-                                               NULL);
+    USER_LOG_INFO("--> Step 2: Subscribe to GPS, Battery, and RTK position topics");
+    djiStat = DjiFcSubscription_SubscribeTopic(DJI_FC_SUBSCRIPTION_TOPIC_GPS_POSITION, DJI_DATA_SUBSCRIPTION_TOPIC_1_HZ, NULL);
     if (djiStat != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
         USER_LOG_ERROR("Subscribe topic gps position error.");
         return DJI_ERROR_SYSTEM_MODULE_CODE_UNKNOWN;
     }
 
-    USER_LOG_INFO("--> Step 3: Get latest value of the subscribed topics in the next 10 seconds\r\n");
+    djiStat = DjiFcSubscription_SubscribeTopic(DJI_FC_SUBSCRIPTION_TOPIC_BATTERY_SINGLE_INFO_INDEX1, DJI_DATA_SUBSCRIPTION_TOPIC_1_HZ, NULL);
+    if (djiStat != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
+        USER_LOG_ERROR("Subscribe topic battery info error.");
+        return DJI_ERROR_SYSTEM_MODULE_CODE_UNKNOWN;
+    }
 
-    for (int i = 0; i < 10; ++i) {
-        osalHandler->TaskSleepMs(1000 / FC_SUBSCRIPTION_TASK_FREQ);
-        djiStat = DjiFcSubscription_GetLatestValueOfTopic(DJI_FC_SUBSCRIPTION_TOPIC_VELOCITY,
-                                                          (uint8_t *) &velocity,
-                                                          sizeof(T_DjiFcSubscriptionVelocity),
-                                                          &timestamp);
-        if (djiStat != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
-            USER_LOG_ERROR("get value of topic velocity error.");
-        } else {
-            USER_LOG_INFO("velocity: x = %f y = %f z = %f healthFlag = %d, timestamp ms = %d us = %d.", velocity.data.x,
-                          velocity.data.y,
-                          velocity.data.z, velocity.health, timestamp.millisecond, timestamp.microsecond);
-        }
+    djiStat = DjiFcSubscription_SubscribeTopic(DJI_FC_SUBSCRIPTION_TOPIC_RTK_POSITION, DJI_DATA_SUBSCRIPTION_TOPIC_1_HZ, NULL);
+    if (djiStat != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
+        USER_LOG_ERROR("Subscribe topic rtk position error.");
+        return DJI_ERROR_SYSTEM_MODULE_CODE_UNKNOWN;
+    }
 
+    USER_LOG_INFO("--> Step 3: Continuously get latest value of GPS, Battery, and RTK position data (Press Ctrl+Q to stop)");
+
+    // Loop until the user stops the program
+    while (keepRunning) {
+        osalHandler->TaskSleepMs(1000); // Sleep for 1 second
+
+        // Get GPS position
         djiStat = DjiFcSubscription_GetLatestValueOfTopic(DJI_FC_SUBSCRIPTION_TOPIC_GPS_POSITION,
                                                           (uint8_t *) &gpsPosition,
                                                           sizeof(T_DjiFcSubscriptionGpsPosition),
@@ -170,61 +190,71 @@ T_DjiReturnCode DjiTest_FcSubscriptionRunSample(void)
         if (djiStat != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
             USER_LOG_ERROR("get value of topic gps position error.");
         } else {
-            USER_LOG_INFO("gps position: x = %d y = %d z = %d.", gpsPosition.x, gpsPosition.y, gpsPosition.z);
+            if (s_userFcSubscriptionDataShow == true) {
+                // Convert raw GPS position to latitude, longitude, and altitude
+                double latitude = gpsPosition.x / 1e7;  // Convert from scaled degrees to degrees
+                double longitude = gpsPosition.y / 1e7; // Convert from scaled degrees to degrees
+                double altitude = gpsPosition.z / 1000.0; // Convert from millimeters to meters
+
+                USER_LOG_INFO("gps position: latitude = %.7f, longitude = %.7f, altitude = %.2f meters.",
+                              latitude, longitude, altitude);
+            }
         }
 
-        // Attention: if you want to subscribe the single battery info on M300 RTK, you need connect USB cable to
-        // OSDK device or use topic DJI_FC_SUBSCRIPTION_TOPIC_BATTERY_INFO instead.
+        // Get RTK position
+        djiStat = DjiFcSubscription_GetLatestValueOfTopic(DJI_FC_SUBSCRIPTION_TOPIC_RTK_POSITION,
+                                                          (uint8_t *) &rtkPosition,
+                                                          sizeof(T_DjiFcSubscriptionRtkPosition),
+                                                          &timestamp);
+        if (djiStat != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
+            USER_LOG_ERROR("get value of topic rtk position error.");
+        } else {
+            if (s_userFcSubscriptionDataShow == true) {
+                // Convert raw RTK position to latitude, longitude, and altitude
+                double rtkLatitude = rtkPosition.x / 1e7;  // Convert from scaled degrees to degrees
+                double rtkLongitude = rtkPosition.y / 1e7; // Convert from scaled degrees to degrees
+                double rtkAltitude = rtkPosition.z / 1000.0; // Convert from millimeters to meters
+
+                USER_LOG_INFO("rtk position: latitude = %.7f, longitude = %.7f, altitude = %.2f meters.",
+                              rtkLatitude, rtkLongitude, rtkAltitude);
+            }
+        }
+
+        // Get battery info
         djiStat = DjiFcSubscription_GetLatestValueOfTopic(DJI_FC_SUBSCRIPTION_TOPIC_BATTERY_SINGLE_INFO_INDEX1,
                                                           (uint8_t *) &singleBatteryInfo,
                                                           sizeof(T_DjiFcSubscriptionSingleBatteryInfo),
                                                           &timestamp);
         if (djiStat != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
-            USER_LOG_ERROR("get value of topic battery single info index1 error.");
+            USER_LOG_ERROR("get value of topic battery single info error.");
         } else {
-            USER_LOG_INFO(
-                "battery single info index1: capacity percent = %ld% voltage = %ldV temperature = %.2f degree.",
-                singleBatteryInfo.batteryCapacityPercent,
-                singleBatteryInfo.currentVoltage / 1000,
-                (dji_f32_t) singleBatteryInfo.batteryTemperature / 10);
-        }
-
-        djiStat = DjiFcSubscription_GetLatestValueOfTopic(DJI_FC_SUBSCRIPTION_TOPIC_BATTERY_SINGLE_INFO_INDEX2,
-                                                          (uint8_t *) &singleBatteryInfo,
-                                                          sizeof(T_DjiFcSubscriptionSingleBatteryInfo),
-                                                          &timestamp);
-        if (djiStat != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
-            USER_LOG_ERROR("get value of topic battery single info index2 error.");
-        } else {
-            USER_LOG_INFO(
-                "battery single info index2: capacity percent = %ld% voltage = %ldV temperature = %.2f degree.\r\n",
-                singleBatteryInfo.batteryCapacityPercent,
-                singleBatteryInfo.currentVoltage / 1000,
-                (dji_f32_t) singleBatteryInfo.batteryTemperature / 10);
+            USER_LOG_INFO("battery single info: capacity percent = %ld%% voltage = %ldV temperature = %.2f degree.",
+                          singleBatteryInfo.batteryCapacityPercent,
+                          singleBatteryInfo.currentVoltage / 1000,
+                          (dji_f32_t) singleBatteryInfo.batteryTemperature / 10);
         }
     }
 
-    USER_LOG_INFO("--> Step 4: Unsubscribe the topics of quaternion, velocity and gps position");
-    djiStat = DjiFcSubscription_UnSubscribeTopic(DJI_FC_SUBSCRIPTION_TOPIC_QUATERNION);
-    if (djiStat != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
-        USER_LOG_ERROR("UnSubscribe topic quaternion error.");
-        return DJI_ERROR_SYSTEM_MODULE_CODE_UNKNOWN;
-    }
-
-    djiStat = DjiFcSubscription_UnSubscribeTopic(DJI_FC_SUBSCRIPTION_TOPIC_VELOCITY);
-    if (djiStat != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
-        USER_LOG_ERROR("UnSubscribe topic quaternion error.");
-        return DJI_ERROR_SYSTEM_MODULE_CODE_UNKNOWN;
-    }
-
+    USER_LOG_INFO("--> Step 4: Unsubscribe the topics of GPS, Battery, and RTK position");
     djiStat = DjiFcSubscription_UnSubscribeTopic(DJI_FC_SUBSCRIPTION_TOPIC_GPS_POSITION);
     if (djiStat != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
-        USER_LOG_ERROR("UnSubscribe topic quaternion error.");
+        USER_LOG_ERROR("UnSubscribe topic gps position error.");
+        return DJI_ERROR_SYSTEM_MODULE_CODE_UNKNOWN;
+    }
+
+    djiStat = DjiFcSubscription_UnSubscribeTopic(DJI_FC_SUBSCRIPTION_TOPIC_BATTERY_SINGLE_INFO_INDEX1);
+    if (djiStat != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
+        USER_LOG_ERROR("UnSubscribe topic battery info error.");
+        return DJI_ERROR_SYSTEM_MODULE_CODE_UNKNOWN;
+    }
+
+    djiStat = DjiFcSubscription_UnSubscribeTopic(DJI_FC_SUBSCRIPTION_TOPIC_RTK_POSITION);
+    if (djiStat != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
+        USER_LOG_ERROR("UnSubscribe topic rtk position error.");
         return DJI_ERROR_SYSTEM_MODULE_CODE_UNKNOWN;
     }
 
     USER_LOG_INFO("--> Step 5: Deinit fc subscription module");
-
     djiStat = DjiFcSubscription_DeInit();
     if (djiStat != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
         USER_LOG_ERROR("Deinit fc subscription error.");
@@ -233,6 +263,9 @@ T_DjiReturnCode DjiTest_FcSubscriptionRunSample(void)
 
     s_userFcSubscriptionDataShow = false;
     USER_LOG_INFO("Fc subscription sample end");
+
+    // Wait for the keyboard listener thread to finish
+    pthread_join(keyboardThread, NULL);
 
     return DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS;
 }

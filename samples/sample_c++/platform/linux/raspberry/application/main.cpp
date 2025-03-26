@@ -59,59 +59,62 @@ int main(int argc, char **argv)
     T_DjiReturnCode returnCode;
     T_DjiTestApplyHighPowerHandler applyHighPowerHandler;
 
-start:
-    std::cout
-        << "\n"
-        << "| Available commands:                                                                              |\n"
-        << "| [0] Fc subscribe sample - subscribe quaternion and gps data                                      |\n"
-        << "| [1] Flight controller sample - you can control flying by PSDK                                    |\n"
-        << "| [2] Hms info manager sample - get health manger system info by language                          |\n"
-        << "| [a] Gimbal manager sample - you can control gimbal by PSDK                                       |\n"
-        << "| [c] Camera stream view sample - display the camera video stream                                  |\n"
-        << "| [d] Stereo vision view sample - display the stereo image                                         |\n"
-        << "| [e] Run camera manager sample - you can test camera's functions interactively                    |\n"
-        << "| [f] Start rtk positioning sample - you can receive rtk rtcm data when rtk signal is ok           |\n"
-        << std::endl;
+    DjiTest_FcSubscriptionRunSample();
 
-    std::cin >> inputChar;
-    switch (inputChar) {
-        case '0':
-            DjiTest_FcSubscriptionRunSample();
-            break;
-        case '1':
-            DjiUser_RunFlightControllerSample();
-            break;
-        case '2':
-            DjiUser_RunHmsManagerSample();
-            break;
-        case 'a':
-            DjiUser_RunGimbalManagerSample();
-            break;
-        case 'c':
-            DjiUser_RunCameraStreamViewSample();
-            break;
-        case 'd':
-            DjiUser_RunStereoVisionViewSample();
-            break;
-        case 'e':
-            DjiUser_RunCameraManagerSample();
-            break;
-        case 'f':
-            returnCode = DjiTest_PositioningStartService();
-            if (returnCode != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
-                USER_LOG_ERROR("rtk positioning sample init error");
-                break;
-            }
+// start:
+//     std::cout
+//         << "\n"
+//         << "| Available commands:                                                                              |\n"
+//         << "| [0] Fc subscribe sample - subscribe quaternion and gps data                                      |\n"
+//         << "| [1] Flight controller sample - you can control flying by PSDK                                    |\n"
+//         << "| [2] Hms info manager sample - get health manger system info by language                          |\n"
+//         << "| [a] Gimbal manager sample - you can control gimbal by PSDK                                       |\n"
+//         << "| [c] Camera stream view sample - display the camera video stream                                  |\n"
+//         << "| [d] Stereo vision view sample - display the stereo image                                         |\n"
+//         << "| [e] Run camera manager sample - you can test camera's functions interactively                    |\n"
+//         << "| [f] Start rtk positioning sample - you can receive rtk rtcm data when rtk signal is ok           |\n"
+//         << std::endl;
 
-            USER_LOG_INFO("Start rtk positioning sample successfully");
-            break;
-        default:
-            break;
-    }
+//     std::cin >> inputChar;
+//     switch (inputChar) {
+//         case '0':
+//             DjiTest_FcSubscriptionRunSample();
+//             break;
+//         case '1':
+//             DjiUser_RunFlightControllerSample();
+//             break;
+//         case '2':
+//             DjiUser_RunHmsManagerSample();
+//             break;
+//         case 'a':
+//             DjiUser_RunGimbalManagerSample();
+//             break;
+//         case 'c':
+//             DjiUser_RunCameraStreamViewSample();
+//             break;
+//         case 'd':
+//             DjiUser_RunStereoVisionViewSample();
+//             break;
+//         case 'e':
+//             DjiUser_RunCameraManagerSample();
+//             break;
+//         case 'f':
+//             returnCode = DjiTest_PositioningStartService();
+//             if (returnCode != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
+//                 USER_LOG_ERROR("rtk positioning sample init error");
+//                 break;
+//             }
+
+//             USER_LOG_INFO("Start rtk positioning sample successfully");
+//             break;
+//         default:
+//             break;
+//     }
 
     osalHandler->TaskSleepMs(2000);
 
-    goto start;
+    // goto start;
+    return 0;
 }
 
 /* Private functions definition-----------------------------------------------*/

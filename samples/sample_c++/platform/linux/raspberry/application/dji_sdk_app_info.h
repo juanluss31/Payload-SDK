@@ -35,11 +35,11 @@ extern "C" {
 /* Exported constants --------------------------------------------------------*/
 // ATTENTION: User must goto https://developer.dji.com/user/apps/#all to create your own dji sdk application, get dji sdk application
 // information then fill in the application information here.
-#define USER_APP_NAME               "@USER_APP_NAME@"
-#define USER_APP_ID                 "@USER_APP_ID@"
-#define USER_APP_KEY                "@USER_APP_KEY@"
-#define USER_APP_LICENSE            "@USER_APP_LICENSE@"
-#define USER_DEVELOPER_ACCOUNT      "@USER_DEVELOPER_ACCOUNT@"
+#define USER_APP_NAME               "Antenna Measure"
+#define USER_APP_ID                 "158905"
+#define USER_APP_KEY                "5dc90aec8207154f6ba3b313a50d326"
+#define USER_APP_LICENSE            "ELhwsCR4mR2BUkCjbBtkByOsN/kPotB39MfpU1bi2O8d8QX/b2E23+G+jSvYFwwtY28AblRzRjFAl0T04VVwKktSzQm2c7HyKCd6QvwNqEUNmKd5JJeELgRSVVYoKzc9lVEFNSBHiwlA6EMKaPgkCI0CImGm+6MJpWXfJMC2QnuiIAITqAj3s2hcr2xVd4kY1CUlFSDbsSuNz2rm29/cMJTgD3ZhaomQaP8uQM74B+Z7Ao1ec1cQUN5YnQvyRN7tLtGIJnnPpBHiBwMcW/5b/TsYpgWgCbGXNK8hPXztAJvtlncy+ausOGL+FCzX3qlujLootZQJrxARsjCWS+XHsw=="
+#define USER_DEVELOPER_ACCOUNT      "jguerrer"
 #define USER_BAUD_RATE              "460800"
 
 /* Exported types ------------------------------------------------------------*/

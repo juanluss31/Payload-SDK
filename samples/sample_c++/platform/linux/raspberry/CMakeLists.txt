@@ -1,25 +1,6 @@
 cmake_minimum_required(VERSION 3.5)
 project(dji_sdk_proyectoieg CXX)
 
-# ---------------------------------------------------------------------
-# Set secret variables from environment; these will be provided in GitHub Actions
-set(USER_APP_NAME $ENV{USER_APP_NAME})
-set(USER_APP_ID $ENV{USER_APP_ID})
-set(USER_APP_KEY $ENV{USER_APP_KEY})
-set(USER_APP_LICENSE $ENV{USER_APP_LICENSE})
-set(USER_DEVELOPER_ACCOUNT $ENV{USER_DEVELOPER_ACCOUNT})
-set(USER_BAUD_RATE $ENV{USER_BAUD_RATE})
-
-# Configure the header file from the template. The generated file will be placed in the binary directory.
-configure_file(
-  ${CMAKE_CURRENT_SOURCE_DIR}/application/dji_sdk_app_info.h.in
-  ${CMAKE_BINARY_DIR}/application/dji_sdk_app_info.h
-)
-
-# Add the generated directory to the include path so that the generated header is found.
-include_directories(${CMAKE_BINARY_DIR}/application)
-# ---------------------------------------------------------------------
-
 set(CMAKE_C_FLAGS "-pthread -std=gnu99")
 set(CMAKE_CXX_FLAGS "-std=c++11 -pthread")
 set(CMAKE_EXE_LINKER_FLAGS "-pthread")
