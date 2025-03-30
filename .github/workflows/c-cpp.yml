@@ -11,13 +11,13 @@ jobs:
 
     runs-on: ubuntu-latest
 
-    env:
-      USER_APP_NAME: ${{ secrets.USER_APP_NAME }}
-      USER_APP_ID: ${{ secrets.USER_APP_ID }}
-      USER_APP_KEY: ${{ secrets.USER_APP_KEY }}
-      USER_APP_LICENSE: ${{ secrets.USER_APP_LICENSE }}
-      USER_DEVELOPER_ACCOUNT: ${{ secrets.USER_DEVELOPER_ACCOUNT }}
-      USER_BAUD_RATE: ${{ secrets.USER_BAUD_RATE }}
+    # env:
+    #   USER_APP_NAME: ${{ secrets.USER_APP_NAME }}
+    #   USER_APP_ID: ${{ secrets.USER_APP_ID }}
+    #   USER_APP_KEY: ${{ secrets.USER_APP_KEY }}
+    #   USER_APP_LICENSE: ${{ secrets.USER_APP_LICENSE }}
+    #   USER_DEVELOPER_ACCOUNT: ${{ secrets.USER_DEVELOPER_ACCOUNT }}
+    #   USER_BAUD_RATE: ${{ secrets.USER_BAUD_RATE }}
 
     steps:
     - uses: actions/checkout@v4
@@ -26,7 +26,7 @@ jobs:
           sudo apt-get update
           
           # Install required system packages
-          sudo apt-get install -y automake libaio-dev libusb-1.0-0-dev unzip cmake build-essential pkg-config
+          sudo apt-get install -y automake libaio-dev libusb-1.0-0-dev unzip cmake build-essential pkg-config libhackrf-dev
           
     - name: Build with CMake
       run: |

@@ -32,6 +32,10 @@
 #include <pthread.h> // For thread creation
 #include <termios.h> // For terminal input handling
 #include <unistd.h>  // For read()
+#include <libhackrf/hackrf.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 /* Private constants ---------------------------------------------------------*/
 #define FC_SUBSCRIPTION_TASK_FREQ         (1)
@@ -43,6 +47,9 @@
 static void *UserFcSubscription_Task(void *arg);
 static T_DjiReturnCode DjiTest_FcSubscriptionReceiveQuaternionCallback(const uint8_t *data, uint16_t dataSize,
                                                                        const T_DjiDataTimestamp *timestamp);
+int HackRFSweepCallback(hackrf_transfer* transfer);
+int InitHackRFSweep();
+void CleanupHackRF();
 
 /* Private variables ---------------------------------------------------------*/
 static T_DjiTaskHandle s_userFcSubscriptionThread;
@@ -50,6 +57,14 @@ static bool s_userFcSubscriptionDataShow = false;
 static uint8_t s_totalSatelliteNumberUsed = 0;
 static uint32_t s_userFcSubscriptionDataCnt = 0;
 static volatile bool keepRunning = true;
+static hackrf_device* device = NULL;
+static volatile bool hackrf_running = true;
+static double signal_power_db = -999.0; // Global variable to store signal power
+
+// Sweep configuration
+static uint32_t start_frequency_hz = 2700000000; // Start frequency: 2.7 GHz
+static uint32_t bin_size_hz = 1000000;          // Bin size: 1 MHz
+static uint32_t bins_per_sweep = 20;            // Number of bins per sweep
 
 /* Exported functions definition ---------------------------------------------*/
 T_DjiReturnCode DjiTest_FcSubscriptionStartService(void)
@@ -157,6 +172,12 @@ T_DjiReturnCode DjiTest_FcSubscriptionRunSample(void)
         return DJI_ERROR_SYSTEM_MODULE_CODE_UNKNOWN;
     }
 
+    // Initialize HackRF
+    if (InitHackRFSweep() != 0) {
+        USER_LOG_ERROR("Failed to initialize HackRF.");
+        return DJI_ERROR_SYSTEM_MODULE_CODE_UNKNOWN;
+    }
+
     USER_LOG_INFO("--> Step 2: Subscribe to GPS, Battery, and RTK position topics");
     djiStat = DjiFcSubscription_SubscribeTopic(DJI_FC_SUBSCRIPTION_TOPIC_GPS_POSITION, DJI_DATA_SUBSCRIPTION_TOPIC_1_HZ, NULL);
     if (djiStat != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
@@ -211,9 +232,9 @@ T_DjiReturnCode DjiTest_FcSubscriptionRunSample(void)
         } else {
             if (s_userFcSubscriptionDataShow == true) {
                 // Convert raw RTK position to latitude, longitude, and altitude
-                double rtkLatitude = rtkPosition.x / 1e7;  // Convert from scaled degrees to degrees
-                double rtkLongitude = rtkPosition.y / 1e7; // Convert from scaled degrees to degrees
-                double rtkAltitude = rtkPosition.z / 1000.0; // Convert from millimeters to meters
+                double rtkLatitude = rtkPosition.latitude / 1e7;  // Convert from scaled degrees to degrees
+                double rtkLongitude = rtkPosition.longitude / 1e7; // Convert from scaled degrees to degrees
+                double rtkAltitude = rtkPosition.hfsl / 1000.0; // Convert from millimeters to meters
 
                 USER_LOG_INFO("rtk position: latitude = %.7f, longitude = %.7f, altitude = %.2f meters.",
                               rtkLatitude, rtkLongitude, rtkAltitude);
@@ -233,6 +254,10 @@ T_DjiReturnCode DjiTest_FcSubscriptionRunSample(void)
                           singleBatteryInfo.currentVoltage / 1000,
                           (dji_f32_t) singleBatteryInfo.batteryTemperature / 10);
         }
+
+        // Log signal power at 2.7 GHz
+        USER_LOG_INFO("Signal power at 2.7 GHz: %.2f dB", signal_power_db);
+
     }
 
     USER_LOG_INFO("--> Step 4: Unsubscribe the topics of GPS, Battery, and RTK position");
@@ -263,7 +288,8 @@ T_DjiReturnCode DjiTest_FcSubscriptionRunSample(void)
 
     s_userFcSubscriptionDataShow = false;
     USER_LOG_INFO("Fc subscription sample end");
-
+    CleanupHackRF(); // Cleanup HackRF resources
+    USER_LOG_INFO("HackRF resources cleaned up.");
     // Wait for the keyboard listener thread to finish
     pthread_join(keyboardThread, NULL);
 
@@ -383,6 +409,90 @@ static T_DjiReturnCode DjiTest_FcSubscriptionReceiveQuaternionCallback(const uin
     }
 
     return DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS;
+}
+
+// Callback function to process sweep data
+int HackRFSweepCallback(hackrf_transfer* transfer) {
+    if (!hackrf_running) {
+        return -1; // Stop the sweep
+    }
+
+    // Process the sweep data
+    uint16_t* amplitudes = (uint16_t*)transfer->buffer;
+    int bin_count = transfer->valid_length / sizeof(uint16_t);
+
+    // Iterate through bins and calculate frequencies
+    for (int i = 0; i < bin_count; i++) {
+        double freq = start_frequency_hz + (i * bin_size_hz); // Calculate frequency for each bin
+
+        // Check if the frequency is in the 2.7 GHz range
+        if (freq >= 2700000000 && freq < 2701000000) { // 2.7 GHz range
+            signal_power_db = 20 * log10(amplitudes[i]); // Convert amplitude to dB
+            break; // Stop after finding the desired frequency
+        }
+    }
+
+    return 0;
+}
+
+// Initialize HackRF for sweeping
+int InitHackRFSweep() {
+    int result;
+
+    // Initialize HackRF
+    result = hackrf_init();
+    if (result != HACKRF_SUCCESS) {
+        USER_LOG_ERROR("Failed to initialize HackRF: %s", hackrf_error_name(result));
+        return -1;
+    }
+
+    // Open HackRF device
+    result = hackrf_open(&device);
+    if (result != HACKRF_SUCCESS) {
+        USER_LOG_ERROR("Failed to open HackRF device: %s", hackrf_error_name(result));
+        hackrf_exit();
+        return -1;
+    }
+
+    // Configure HackRF for sweeping
+    result = hackrf_set_sample_rate(device, bin_size_hz * bins_per_sweep);
+    if (result != HACKRF_SUCCESS) {
+        USER_LOG_ERROR("Failed to set sample rate: %s", hackrf_error_name(result));
+        hackrf_close(device);
+        hackrf_exit();
+        return -1;
+    }
+
+    result = hackrf_set_freq(device, start_frequency_hz);
+    if (result != HACKRF_SUCCESS) {
+        USER_LOG_ERROR("Failed to set frequency: %s", hackrf_error_name(result));
+        hackrf_close(device);
+        hackrf_exit();
+        return -1;
+    }
+
+    // Start receiving data
+    result = hackrf_start_rx(device, HackRFSweepCallback, NULL);
+    if (result != HACKRF_SUCCESS) {
+        USER_LOG_ERROR("Failed to start HackRF sweep: %s", hackrf_error_name(result));
+        hackrf_close(device);
+        hackrf_exit();
+        return -1;
+    }
+
+    USER_LOG_INFO("HackRF initialized for 2.7 GHz sweep.");
+    return 0;
+}
+
+// Cleanup HackRF resources
+void CleanupHackRF() {
+    hackrf_running = false; // Stop the sweep
+    if (device) {
+        hackrf_stop_rx(device);
+        hackrf_close(device);
+    }
+    hackrf_exit();
+    USER_LOG_INFO("HackRF resources cleaned up.");
 }
 
 /****************** (C) COPYRIGHT DJI Innovations *****END OF FILE****/

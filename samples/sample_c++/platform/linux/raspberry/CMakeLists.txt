@@ -127,6 +127,15 @@ else ()
     message(STATUS "Cannot Find LIBUSB")
 endif (LIBUSB_FOUND)
 
+# Link the HackRF library
+find_library(HACKRF_LIB hackrf REQUIRED)
+if (HACKRF_LIB)
+    message(STATUS "HackRF library found: ${HACKRF_LIB}")
+    target_link_libraries(${PROJECT_NAME} ${HACKRF_LIB})
+else()
+    message(FATAL_ERROR "HackRF library not found. Please install libhackrf-dev.")
+endif()
+
 if (NOT EXECUTABLE_OUTPUT_PATH)
     set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
 endif ()
