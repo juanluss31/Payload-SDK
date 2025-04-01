@@ -60,6 +60,7 @@ static volatile bool keepRunning = true;
 static hackrf_device* device = NULL;
 static volatile bool hackrf_running = true;
 static double signal_power_db = -999.0; // Global variable to store signal power
+static bool hackrf_available = false; // Flag to indicate if HackRF is connected
 
 // Sweep configuration
 static uint32_t start_frequency_hz = 2700000000; // Start frequency: 2.7 GHz
@@ -443,15 +444,19 @@ int InitHackRFSweep() {
     result = hackrf_init();
     if (result != HACKRF_SUCCESS) {
         USER_LOG_ERROR("Failed to initialize HackRF: %s", hackrf_error_name(result));
-        return -1;
+        USER_LOG_INFO("No HackRF connected.");
+        hackrf_available = false; // Mark HackRF as unavailable
+        return 0; // Do not stop the program
     }
 
     // Open HackRF device
     result = hackrf_open(&device);
     if (result != HACKRF_SUCCESS) {
         USER_LOG_ERROR("Failed to open HackRF device: %s", hackrf_error_name(result));
+        USER_LOG_INFO("No HackRF connected.");
         hackrf_exit();
-        return -1;
+        hackrf_available = false; // Mark HackRF as unavailable
+        return 0; // Do not stop the program
     }
 
     // Configure HackRF for sweeping
@@ -460,7 +465,9 @@ int InitHackRFSweep() {
         USER_LOG_ERROR("Failed to set sample rate: %s", hackrf_error_name(result));
         hackrf_close(device);
         hackrf_exit();
-        return -1;
+        USER_LOG_INFO("No HackRF connected.");
+        hackrf_available = false; // Mark HackRF as unavailable
+        return 0; // Do not stop the program
     }
 
     result = hackrf_set_freq(device, start_frequency_hz);
@@ -468,7 +475,9 @@ int InitHackRFSweep() {
         USER_LOG_ERROR("Failed to set frequency: %s", hackrf_error_name(result));
         hackrf_close(device);
         hackrf_exit();
-        return -1;
+        USER_LOG_INFO("No HackRF connected.");
+        hackrf_available = false; // Mark HackRF as unavailable
+        return 0; // Do not stop the program
     }
 
     // Start receiving data
@@ -477,10 +486,13 @@ int InitHackRFSweep() {
         USER_LOG_ERROR("Failed to start HackRF sweep: %s", hackrf_error_name(result));
         hackrf_close(device);
         hackrf_exit();
-        return -1;
+        USER_LOG_INFO("No HackRF connected.");
+        hackrf_available = false; // Mark HackRF as unavailable
+        return 0; // Do not stop the program
     }
 
     USER_LOG_INFO("HackRF initialized for 2.7 GHz sweep.");
+    hackrf_available = true; // Mark HackRF as available
     return 0;
 }
 
