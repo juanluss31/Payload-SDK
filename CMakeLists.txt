@@ -50,4 +50,15 @@ elseif (USE_SYSTEM_ARCH MATCHES RTOS)
     add_subdirectory(samples/sample_c/platform/rtos_freertos/stm32f4_discovery/project/armgcc)
 endif ()
 
+# Add HackRF test executable
+add_executable(test_hackrf test_hackrf.c)
+
+# Manually specify FFTW paths
+set(FFTW_INCLUDES /usr/include) # Path to fftw3.h
+set(FFTW_LIBRARIES /usr/lib/x86_64-linux-gnu/libfftw3f.so) # Path to libfftw3f.so
+
+# Include FFTW headers and link the library
+include_directories(${FFTW_INCLUDES})
+target_link_libraries(test_hackrf hackrf ${FFTW_LIBRARIES} m)
+
 add_custom_target(${PROJECT_NAME} ALL)

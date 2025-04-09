@@ -137,7 +137,7 @@ void Application::DjiUser_SetupEnvironment(int argc, char **argv)
     printConsole.consoleLevel = DJI_LOGGER_CONSOLE_LOG_LEVEL_INFO;
     printConsole.isSupportColor = true;
 
-    // localRecordConsole.consoleLevel = DJI_LOGGER_CONSOLE_LOG_LEVEL_DEBUG;
+    /*localRecordConsole.consoleLevel = DJI_LOGGER_CONSOLE_LOG_LEVEL_DEBUG;*/ 
     localRecordConsole.consoleLevel = DJI_LOGGER_CONSOLE_LOG_LEVEL_INFO;
     localRecordConsole.func = DjiUser_LocalWrite;
     localRecordConsole.isSupportColor = false;
